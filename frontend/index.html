@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="app_title">Smart Civic Connect</title>
+    <!-- Bootstrap CSS CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Custom Application Styles -->
+    <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+
+    <div class="split-layout">
+        <!-- Sidebar Visual Banner (Left Side) -->
+        <div class="auth-sidebar">
+            <div class="text-center">
+                <i class="bi bi-shield-check text-white fs-1 mb-2"></i>
+                <h1 class="fw-bold text-white mb-2 brand-font" data-i18n="app_title">Smart Civic Connect</h1>
+                <p class="text-light opacity-75 small mb-0" data-i18n="app_tagline">Civic Issue Reporting & Resolution Platform</p>
+            </div>
+            
+            <!-- Banner Image with Fallback Image -->
+            <img class="auth-sidebar-img" src="images/civic_connect_banner.jpg" alt="Civic Illustration" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=800&auto=format&fit=crop';">
+        </div>
+
+        <!-- Form Column (Right Side) -->
+        <div class="auth-form-container">
+            <!-- Language Toggle Switch -->
+            <div class="d-flex justify-content-end align-items-center mb-4">
+                <div class="lang-toggle-container shadow-sm">
+                    <button class="lang-btn active" data-lang="en">EN</button>
+                    <button class="lang-btn" data-lang="te">తెలుగు</button>
+                </div>
+            </div>
+
+            <!-- Auth Form Card -->
+            <div class="glass-card shadow-sm">
+                
+                <!-- Role Selector Tabs -->
+                <div class="role-selector-container shadow-sm">
+                    <button class="role-tab-btn active" data-role="citizen">
+                        <i class="bi bi-person-fill me-1"></i> Citizen
+                    </button>
+                    <button class="role-tab-btn" data-role="officer">
+                        <i class="bi bi-briefcase-fill me-1"></i> Officer
+                    </button>
+                    <button class="role-tab-btn" data-role="admin">
+                        <i class="bi bi-shield-lock-fill me-1"></i> Super Admin
+                    </button>
+                </div>
+
+                <!-- Card Heading -->
+                <div class="text-center mb-4">
+                    <i class="bi bi-person-circle text-primary fs-1 mb-2" id="auth-icon"></i>
+                    <h3 class="fw-bold text-main mb-1" id="auth-title" data-i18n="login_citizen_title">Citizen Portal Login</h3>
+                    <p class="text-muted small mb-0" id="auth-subtitle">Access citizen services, report civic issues, & track progress</p>
+                </div>
+
+                <!-- Alert Message Box -->
+                <div id="auth-alert" class="alert alert-danger d-none" role="alert"></div>
+
+                <!-- LOGIN FORM -->
+                <form id="login-form">
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-semibold" data-i18n="email">Email Address</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent border-end-0 text-muted"><i class="bi bi-envelope"></i></span>
+                            <input type="email" id="login-email" class="form-control glass-input border-start-0" required data-i18n-placeholder="email">
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label text-muted small fw-semibold" data-i18n="password">Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent border-end-0 text-muted"><i class="bi bi-lock"></i></span>
+                            <input type="password" id="login-password" class="form-control glass-input border-start-0" required data-i18n-placeholder="password">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-premium w-100 py-2.5 mb-3" id="login-submit-btn">
+                        <span data-i18n="login_btn">Sign In</span>
+                    </button>
+                    <div class="text-center" id="auth-footer-container">
+                        <a href="#" id="go-to-register" class="text-primary text-decoration-none small fw-semibold" data-i18n="no_account">New citizen? Create an account</a>
+                    </div>
+                </form>
+
+                <!-- REGISTER FORM (Citizen Self-Registration) -->
+                <form id="register-form" class="d-none">
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-semibold" data-i18n="full_name">Full Name</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent border-end-0 text-muted"><i class="bi bi-person"></i></span>
+                            <input type="text" id="reg-name" class="form-control glass-input border-start-0" required data-i18n-placeholder="full_name">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-semibold" data-i18n="email">Email Address</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent border-end-0 text-muted"><i class="bi bi-envelope"></i></span>
+                            <input type="email" id="reg-email" class="form-control glass-input border-start-0" required data-i18n-placeholder="email">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-semibold" data-i18n="phone">Phone Number</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent border-end-0 text-muted"><i class="bi bi-telephone"></i></span>
+                            <input type="tel" id="reg-phone" class="form-control glass-input border-start-0" required data-i18n-placeholder="phone">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-semibold" data-i18n="password">Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent border-end-0 text-muted"><i class="bi bi-lock"></i></span>
+                            <input type="password" id="reg-password" class="form-control glass-input border-start-0" required data-i18n-placeholder="password">
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label text-muted small fw-semibold" data-i18n="confirm_password">Confirm Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent border-end-0 text-muted"><i class="bi bi-lock-fill"></i></span>
+                            <input type="password" id="reg-confirm" class="form-control glass-input border-start-0" required data-i18n-placeholder="confirm_password">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-premium-secondary w-100 py-2.5 mb-3" id="reg-submit-btn">
+                        <span data-i18n="register_btn">Register & Sign Up</span>
+                    </button>
+                    <div class="text-center">
+                        <a href="#" id="go-to-login" class="text-secondary text-decoration-none small fw-semibold" data-i18n="have_account">Already have an account? Sign In</a>
+                    </div>
+                </form>
+
+            </div>
+
+            <!-- Footer -->
+            <footer class="mt-5 text-center">
+                <p class="mb-0 text-muted small">&copy; 2026 Smart Civic Connect. All rights reserved.</p>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Firebase Compat SDK CDNs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
+
+    <!-- Client Configs and Language Support -->
+    <script src="js/config.js"></script>
+    <script src="js/i18n.js"></script>
+    <script src="js/auth.js"></script>
+
+    <!-- Auth UI Logic -->
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const loginForm = document.getElementById("login-form");
+            const registerForm = document.getElementById("register-form");
+            const authIcon = document.getElementById("auth-icon");
+            const authTitle = document.getElementById("auth-title");
+            const authSubtitle = document.getElementById("auth-subtitle");
+            const authAlert = document.getElementById("auth-alert");
+            const authFooterContainer = document.getElementById("auth-footer-container");
+            const roleTabs = document.querySelectorAll(".role-tab-btn");
+
+            let currentSelectedRole = "citizen";
+
+            const roleConfigs = {
+                citizen: {
+                    icon: "bi bi-person-circle text-primary fs-1 mb-2",
+                    title: "Citizen Portal Login",
+                    subtitle: "Access citizen services, report civic issues, & track progress",
+                    showRegister: true
+                },
+                officer: {
+                    icon: "bi bi-shield-person text-primary fs-1 mb-2",
+                    title: "Officer Portal Login",
+                    subtitle: "Municipal officer workspace to inspect & resolve assigned issues",
+                    showRegister: false,
+                    note: '<span class="text-muted small"><i class="bi bi-info-circle me-1"></i> Officer accounts are registered by the Super Admin.</span>'
+                },
+                admin: {
+                    icon: "bi bi-shield-lock-fill text-primary fs-1 mb-2",
+                    title: "Super Admin Portal Login",
+                    subtitle: "System administration, analytics, staff registration & escalations",
+                    showRegister: false,
+                    note: '<span class="text-muted small"><i class="bi bi-info-circle me-1"></i> Super Admin portal requires authorized credentials.</span>'
+                }
+            };
+
+            function bindRegisterLink() {
+                const goToRegister = document.getElementById("go-to-register");
+                if (goToRegister) {
+                    goToRegister.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        loginForm.classList.add("d-none");
+                        registerForm.classList.remove("d-none");
+                        authTitle.innerText = "Citizen Registration";
+                        authSubtitle.innerText = "Create a new citizen account to start reporting local issues";
+                        authAlert.classList.add("d-none");
+                    });
+                }
+            }
+
+            const goToLogin = document.getElementById("go-to-login");
+            if (goToLogin) {
+                goToLogin.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    registerForm.classList.add("d-none");
+                    loginForm.classList.remove("d-none");
+                    authTitle.innerText = roleConfigs[currentSelectedRole].title;
+                    authSubtitle.innerText = roleConfigs[currentSelectedRole].subtitle;
+                    authAlert.classList.add("d-none");
+                });
+            }
+
+            // Role Tab Switchers
+            roleTabs.forEach(btn => {
+                btn.addEventListener("click", () => {
+                    const role = btn.getAttribute("data-role");
+                    currentSelectedRole = role;
+
+                    // Update active tab visual
+                    roleTabs.forEach(t => t.classList.remove("active"));
+                    btn.classList.add("active");
+
+                    // Show login form by default on tab change
+                    loginForm.classList.remove("d-none");
+                    registerForm.classList.add("d-none");
+                    authAlert.classList.add("d-none");
+
+                    // Update header icon, title, and subtitle
+                    const cfg = roleConfigs[role];
+                    authIcon.className = cfg.icon;
+                    authTitle.innerText = cfg.title;
+                    authSubtitle.innerText = cfg.subtitle;
+
+                    // Update footer link / notice
+                    if (cfg.showRegister) {
+                        authFooterContainer.innerHTML = `<a href="#" id="go-to-register" class="text-primary text-decoration-none small fw-semibold" data-i18n="no_account">New citizen? Create an account</a>`;
+                        bindRegisterLink();
+                    } else {
+                        authFooterContainer.innerHTML = cfg.note;
+                    }
+                });
+            });
+
+            // Initial link binding
+            bindRegisterLink();
+
+            // Handle sign in
+            loginForm.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                authAlert.classList.add("d-none");
+                
+                const email = document.getElementById("login-email").value;
+                const password = document.getElementById("login-password").value;
+                const submitBtn = document.getElementById("login-submit-btn");
+                
+                submitBtn.disabled = true;
+                const originalText = submitBtn.innerHTML;
+                submitBtn.innerText = t("signing_in");
+
+                try {
+                    await loginUser(email, password, currentSelectedRole);
+                } catch (err) {
+                    console.error("Login failed:", err);
+                    authAlert.innerText = err.message || "Login failed. Please check credentials.";
+                    authAlert.classList.remove("d-none");
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                }
+            });
+
+            // Handle registration
+            registerForm.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                authAlert.classList.add("d-none");
+
+                const name = document.getElementById("reg-name").value;
+                const email = document.getElementById("reg-email").value;
+                const phone = document.getElementById("reg-phone").value;
+                const password = document.getElementById("reg-password").value;
+                const confirm = document.getElementById("reg-confirm").value;
+                const submitBtn = document.getElementById("reg-submit-btn");
+
+                if (password !== confirm) {
+                    authAlert.innerText = "Passwords do not match!";
+                    authAlert.classList.remove("d-none");
+                    return;
+                }
+
+                submitBtn.disabled = true;
+                const originalText = submitBtn.innerHTML;
+                submitBtn.innerText = t("registering");
+
+                try {
+                    await registerCitizen(name, email, password, phone);
+                } catch (err) {
+                    console.error("Registration failed:", err);
+                    authAlert.innerText = err.message || "Registration failed.";
+                    authAlert.classList.remove("d-none");
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

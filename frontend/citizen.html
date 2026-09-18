@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="citizen_portal">Citizen Portal - Smart Civic Connect</title>
+    <!-- Bootstrap CSS CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Custom Premium Styles -->
+    <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+
+    <!-- Header Navigation -->
+    <nav class="navbar navbar-expand-lg glass-nav sticky-top">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="#">
+                <i class="bi bi-shield-check text-primary fs-3"></i>
+                <span class="brand-font fw-bold" data-i18n="app_title">Smart Civic Connect</span>
+            </a>
+            <button class="navbar-toggler border-secondary text-light" type="button" data-bs-toggle="collapse" data-bs-target="#nav-content">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="nav-content">
+                <div class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-4">
+                    <button class="nav-link nav-link-custom active me-2 border-0 bg-transparent" id="tab-report-btn" onclick="switchTab('report')" data-i18n="tab_report">Report Issue</button>
+                    <button class="nav-link nav-link-custom me-2 border-0 bg-transparent" id="tab-track-btn" onclick="switchTab('track')" data-i18n="tab_track">Track My Issues</button>
+                    <button class="nav-link nav-link-custom me-2 border-0 bg-transparent" id="tab-map-btn" onclick="switchTab('map')" data-i18n="tab_map">Nearby Map</button>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="lang-toggle-container">
+                        <button class="lang-btn active" data-lang="en">EN</button>
+                        <button class="lang-btn" data-lang="te">తెలుగు</button>
+                    </div>
+                    <button class="btn btn-outline-danger btn-sm" onclick="logoutUser()" data-i18n="logout">Logout</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-5">
+        <!-- Welcome banner -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="fw-bold" data-i18n="citizen_portal">Citizen Portal</h2>
+                <p class="text-muted mb-0" id="welcome-message">Welcome back, Citizen</p>
+            </div>
+        </div>
+
+        <div id="citizen-alert" class="alert alert-success d-none alert-dismissible fade show" role="alert">
+            <span id="alert-text"></span>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+        </div>
+
+        <!-- REPORT ISSUE SECTION -->
+        <section id="section-report" class="tab-section">
+            <div class="row">
+                <div class="col-12 col-lg-6 mb-4">
+                    <div class="glass-card h-100">
+                        <h4 class="fw-bold mb-4" data-i18n="tab_report">Report Issue</h4>
+                        
+                        <form id="report-form">
+                            <!-- Category Selection -->
+                            <div class="mb-3">
+                                <label class="form-label text-muted small fw-medium" data-i18n="form_category">Issue Category</label>
+                                <select id="issue-category" class="form-select glass-input" required>
+                                    <option value="" disabled selected data-i18n="form_select_cat">Select Category</option>
+                                    <option value="Garbage" data-i18n="cat_Garbage">Garbage Heap</option>
+                                    <option value="Potholes" data-i18n="cat_Potholes">Potholes</option>
+                                    <option value="WaterLeakage" data-i18n="cat_WaterLeakage">Water Leakage</option>
+                                    <option value="Drainage" data-i18n="cat_Drainage">Drainage Overflow</option>
+                                    <option value="Streetlights" data-i18n="cat_Streetlights">Streetlight Defect</option>
+                                    <option value="RoadDamage" data-i18n="cat_RoadDamage">Road Damage</option>
+                                </select>
+                            </div>
+
+                            <!-- Description -->
+                            <div class="mb-3">
+                                <label class="form-label text-muted small fw-medium" data-i18n="form_desc">Description</label>
+                                <textarea id="issue-desc" class="form-control glass-input" rows="4" required data-i18n-placeholder="form_desc_placeholder"></textarea>
+                            </div>
+
+                            <!-- Photo Upload -->
+                            <div class="mb-4">
+                                <label class="form-label text-muted small fw-medium" data-i18n="form_photo">Upload Photo</label>
+                                <input type="file" id="issue-photo" class="form-control glass-input" accept="image/*" capture="camera" required>
+                                <div class="form-text text-muted small" data-i18n="form_photo_help">Take or upload a picture of the issue</div>
+                                <div id="photo-preview-container" class="mt-3 d-none">
+                                    <img id="photo-preview" src="#" alt="Preview" class="img-thumbnail bg-dark border-secondary" style="max-height: 200px;">
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-premium w-100 py-2.5" id="submit-btn">
+                                <i class="bi bi-send-fill me-2"></i><span data-i18n="submit_complaint">Submit Complaint</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- GPS Location Panel -->
+                <div class="col-12 col-lg-6 mb-4">
+                    <div class="glass-card h-100 d-flex flex-column">
+                        <h4 class="fw-bold mb-3" data-i18n="form_gps">GPS Location</h4>
+                        <div id="gps-status" class="alert alert-info alert-premium mb-3 d-flex align-items-center gap-2">
+                            <div class="spinner-border spinner-border-sm text-warning" id="gps-spinner" role="status"></div>
+                            <i class="bi bi-geo-alt-fill text-warning d-none" id="gps-icon"></i>
+                            <span id="gps-text" data-i18n="form_gps_fetching">Auto-capturing location...</span>
+                        </div>
+                        
+                        <div class="d-none" id="coordinates-panel">
+                            <span class="text-muted small">Latitude:</span> <strong id="val-lat" class="text-primary me-3">0.0</strong>
+                            <span class="text-muted small">Longitude:</span> <strong id="val-lng" class="text-primary">0.0</strong>
+                        </div>
+                        
+                        <!-- Map container -->
+                        <div class="map-container flex-grow-1 mt-3" id="submission-map">
+                            <!-- Fallback layout when Maps SDK is unconfigured -->
+                            <div class="d-flex flex-column align-items-center justify-content-center h-100 text-center p-4 bg-dark bg-opacity-25" id="mock-submission-map">
+                                <i class="bi bi-map-fill text-muted fs-1 mb-2"></i>
+                                <h6 class="fw-bold mb-1">Mock Map View</h6>
+                                <p class="text-muted small mb-0">Google Maps API key is unconfigured. Coordinates are captured automatically from your browser geolocation.</p>
+                                <div class="badge bg-secondary mt-3 p-2 text-wrap" id="mock-coords">Lat: --, Lng: --</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TRACK ISSUES SECTION -->
+        <section id="section-track" class="tab-section d-none">
+            <div class="glass-card">
+                <h4 class="fw-bold mb-4" data-i18n="my_issues">My Submitted Issues</h4>
+                <div id="issues-list" class="row">
+                    <!-- Issue cards populated dynamically -->
+                    <div class="text-center py-5 text-muted col-12" id="no-issues-loader">
+                        <div class="spinner-border text-primary mb-3" role="status"></div>
+                        <p class="mb-0" data-i18n="my_issues">Loading your complaints...</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- NEARBY MAP SECTION -->
+        <section id="section-map" class="tab-section d-none">
+            <div class="glass-card">
+                <h4 class="fw-bold mb-3" data-i18n="tab_map">Nearby Map</h4>
+                <div class="map-container" id="nearby-map" style="height: 550px;">
+                    <div class="d-flex flex-column align-items-center justify-content-center h-100 text-center p-4 bg-dark bg-opacity-25" id="mock-nearby-map">
+                        <i class="bi bi-globe-americas text-muted fs-1 mb-2"></i>
+                        <h5 class="fw-bold mb-1">Global complaints map</h5>
+                        <p class="text-muted small mb-3">Google Maps API key is required to render the interactive map pin clusters.</p>
+                        <div class="card bg-secondary bg-opacity-10 border-secondary border-opacity-20 text-start w-100 max-width-md mx-auto" style="max-width: 600px;">
+                            <div class="card-header text-muted small fw-bold">Static List of Active Complaints (Fallback)</div>
+                            <ul class="list-group list-group-flush bg-transparent" id="mock-complaints-list" style="max-height: 250px; overflow-y: auto;">
+                                <!-- Populated dynamically in mock mode -->
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Duplicate Warning Bootstrap Modal -->
+    <div class="modal fade" id="duplicateModal" data-bs-backdrop="static" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content bg-secondary text-light border border-secondary">
+                <div class="modal-header border-bottom border-secondary">
+                    <h5 class="modal-title fw-bold text-warning" data-i18n="duplicate_title">Similar Issue Detected</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p data-i18n="duplicate_body">A similar issue in this category has already been reported within 100 meters of your location.</p>
+                    <div class="card bg-dark bg-opacity-50 border-secondary text-light mb-3">
+                        <div class="row g-0">
+                            <div class="col-4">
+                                <img id="duplicate-photo" src="https://picsum.photos/400/300" class="img-fluid rounded-start h-100 object-fit-cover" alt="Duplicate Photo">
+                            </div>
+                            <div class="col-8">
+                                <div class="card-body p-2">
+                                    <span class="badge bg-primary mb-1" id="duplicate-category">Potholes</span>
+                                    <p class="card-text small text-truncate mb-1" id="duplicate-desc"></p>
+                                    <small class="text-muted block" id="duplicate-date"></small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="small text-muted mb-0">You can upvote this existing complaint instead of filing a duplicate. Upvoting raises its urgency status in our queue.</p>
+                </div>
+                <div class="modal-footer border-top border-secondary">
+                    <button type="button" class="btn btn-outline-light btn-sm" id="btn-report-anyway-modal" data-i18n="btn_report_anyway">Report As New</button>
+                    <button type="button" class="btn btn-premium btn-sm" id="btn-support-modal" data-i18n="btn_support_complaint">Support Existing Issue</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Mismatch Modal -->
+    <div class="modal fade" id="mismatchModal" tabindex="-1" aria-labelledby="mismatchModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-warning bg-opacity-10 border-0">
+                    <h5 class="modal-title fw-bold text-warning-emphasis d-flex align-items-center gap-2" id="mismatchModalLabel">
+                        <i class="bi bi-exclamation-triangle-fill fs-4 text-warning"></i> Category Mismatch Detected
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body py-4">
+                    <p class="text-secondary mb-3" id="mismatch-message-text">
+                        The uploaded photo appears to show a different issue than the category selected.
+                    </p>
+                    <div class="p-3 bg-light rounded border border-warning border-opacity-25 mb-3">
+                        <div class="small text-muted fw-semibold text-uppercase mb-1">AI Detected Category</div>
+                        <div class="fw-bold text-primary fs-5" id="mismatch-detected-cat-name">Water Leakage</div>
+                    </div>
+                    <p class="small text-muted mb-0">
+                        Would you like to automatically correct your submission category to match the photo and proceed?
+                    </p>
+                </div>
+                <div class="modal-footer bg-light border-0">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Change Manually</button>
+                    <button type="button" class="btn btn-primary btn-sm fw-bold px-3" id="btn-auto-correct-category">
+                        <i class="bi bi-magic me-1"></i> Auto-Correct & Submit
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase Compat SDK CDNs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
+
+    <!-- Project Config & Scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/i18n.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/citizen.js"></script>
+    
+    <!-- Bootstrap Bundle JS CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Start Auth Guard on Citizen Roles
+        guardPage(["citizen"]);
+    </script>
+</body>
+</html>

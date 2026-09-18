@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="admin_portal">Super Admin Console</title>
+    <!-- Bootstrap CSS CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Custom Application Styles -->
+    <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+
+    <!-- Navigation Header -->
+    <nav class="navbar navbar-expand-lg glass-nav border-bottom shadow-sm sticky-top">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand d-flex align-items-center gap-2 brand-font" href="#">
+                <i class="bi bi-shield-lock-fill text-primary fs-3"></i>
+                <span class="fw-bold" data-i18n="app_title">Smart Civic Connect</span>
+            </a>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#adminNavbar">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="adminNavbar">
+                <div class="navbar-nav me-auto ms-lg-4">
+                    <button class="nav-link nav-link-custom active me-2 border-0 bg-transparent" id="tab-dash-btn" onclick="switchAdminTab('dash')" data-i18n="analytics_dashboard">Analytics</button>
+                    <button class="nav-link nav-link-custom me-2 border-0 bg-transparent" id="tab-all-complaints-btn" onclick="switchAdminTab('all-complaints')">All Complaints & Test Cleanup</button>
+                    <button class="nav-link nav-link-custom me-2 border-0 bg-transparent" id="tab-escalated-btn" onclick="switchAdminTab('escalated')" data-i18n="escalated_issues">Escalated</button>
+                    <button class="nav-link nav-link-custom me-2 border-0 bg-transparent" id="tab-users-btn" onclick="switchAdminTab('users')" data-i18n="manage_users">Staff & Users</button>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="lang-toggle-container">
+                        <button class="lang-btn active" data-lang="en">EN</button>
+                        <button class="lang-btn" data-lang="te">తెలుగు</button>
+                    </div>
+                    <button class="btn btn-outline-danger btn-sm" onclick="logoutUser()" data-i18n="logout">Logout</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-5">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+            <div>
+                <h2 class="fw-bold" data-i18n="admin_portal">Super Admin Console</h2>
+                <p class="text-muted mb-0" id="welcome-message">Logged in as Super Admin</p>
+            </div>
+            <div>
+                <button class="btn btn-premium btn-sm shadow-sm" id="btn-trigger-esc" onclick="triggerEscalationJob()">
+                    <i class="bi bi-clock-history me-1"></i><span data-i18n="btn_trigger_escalation">Run Escalation Check</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="admin-alert" class="alert alert-success d-none alert-dismissible fade show" role="alert">
+            <span id="alert-text"></span>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+        </div>
+
+        <!-- ANALYTICS TAB SECTION -->
+        <section id="section-dash" class="admin-tab-section">
+            <!-- Metrics Cards -->
+            <div class="row mb-4">
+                <div class="col-12 col-md-4 mb-3 mb-md-0">
+                    <div class="glass-card text-center py-4">
+                        <i class="bi bi-journal-stack text-primary fs-1 mb-2"></i>
+                        <h3 class="fw-bold mb-1" id="metric-total">--</h3>
+                        <p class="text-muted small mb-0" data-i18n="total_issues">Total Complaints</p>
+                    </div>
+                </div>
+                <div class="col-12 col-md-4 mb-3 mb-md-0">
+                    <div class="glass-card text-center py-4">
+                        <i class="bi bi-speedometer2 text-secondary fs-1 mb-2"></i>
+                        <h3 class="fw-bold mb-1" id="metric-res-time">--</h3>
+                        <p class="text-muted small mb-0" data-i18n="avg_res_time">Avg. Resolution Time</p>
+                    </div>
+                </div>
+                <div class="col-12 col-md-4">
+                    <div class="glass-card text-center py-4">
+                        <i class="bi bi-exclamation-octagon-fill text-danger fs-1 mb-2"></i>
+                        <h3 class="fw-bold mb-1" id="metric-escalated">--</h3>
+                        <p class="text-muted small mb-0" data-i18n="escalated_issues">Escalated Issues</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Heatmap Container -->
+            <div class="glass-card mb-4">
+                <h5 class="fw-bold mb-3" data-i18n="admin_map_heatmap">Issue Distribution Heatmap</h5>
+                <div id="admin-heatmap-map" class="map-container">
+                    <div class="d-flex align-items-center justify-content-center h-100 text-muted">
+                        <span><i class="bi bi-geo-alt me-2"></i>Map loading...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div class="row">
+                <div class="col-12 col-lg-6 mb-4">
+                    <div class="glass-card h-100">
+                        <h5 class="fw-bold mb-3 text-center" data-i18n="analytics_category">Complaints by Category</h5>
+                        <div style="position: relative; height:250px; width:100%">
+                            <canvas id="categoryChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-lg-6 mb-4">
+                    <div class="glass-card h-100">
+                        <h5 class="fw-bold mb-3 text-center" data-i18n="analytics_status">Complaints by Status</h5>
+                        <div style="position: relative; height:250px; width:100%">
+                            <canvas id="statusChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ALL COMPLAINTS & CLEAN TEST REPORTS TAB SECTION -->
+        <section id="section-all-complaints" class="admin-tab-section d-none">
+            <div class="glass-card">
+                <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+                    <h4 class="fw-bold mb-0">All Complaints Directory & Test Data Cleanup</h4>
+                    <button class="btn btn-outline-primary btn-sm" onclick="loadAllComplaintsAdmin()">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Refresh List
+                    </button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover border-secondary border-opacity-20 align-middle">
+                        <thead>
+                            <tr class="text-muted">
+                                <th scope="col">ID</th>
+                                <th scope="col">Category</th>
+                                <th scope="col">Description</th>
+                                <th scope="col">Department</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Support Count</th>
+                                <th scope="col">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="all-complaints-table-body">
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">Loading complaints...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ESCALATED TAB SECTION -->
+        <section id="section-escalated" class="admin-tab-section d-none">
+            <div class="glass-card">
+                <h4 class="fw-bold mb-4" data-i18n="escalated_issues">Escalated Issues</h4>
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover border-secondary border-opacity-20 align-middle">
+                        <thead>
+                            <tr class="text-muted">
+                                <th scope="col">ID</th>
+                                <th scope="col" data-i18n="form_category">Category</th>
+                                <th scope="col">Assigned Department</th>
+                                <th scope="col" data-i18n="escalation_lvl">Esc Level</th>
+                                <th scope="col">Age (Days)</th>
+                                <th scope="col">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="escalated-table-body">
+                            <!-- Populated dynamically -->
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">No escalated issues currently active.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- USERS & STAFF TAB SECTION -->
+        <section id="section-users" class="admin-tab-section d-none">
+            <div class="row">
+                <!-- Registration Form -->
+                <div class="col-12 col-lg-5 mb-4">
+                    <div class="glass-card">
+                        <h4 class="fw-bold mb-4" data-i18n="register_officer_title">Register Officer / Admin</h4>
+                        <form id="staff-register-form">
+                            <div class="mb-3">
+                                <label class="form-label text-muted small fw-medium" data-i18n="full_name">Full Name</label>
+                                <input type="text" id="staff-name" class="form-control glass-input" required placeholder="Full Name">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted small fw-medium" data-i18n="email">Email Address</label>
+                                <input type="email" id="staff-email" class="form-control glass-input" required placeholder="staff@example.com">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted small fw-medium" data-i18n="phone">Phone Number</label>
+                                <input type="tel" id="staff-phone" class="form-control glass-input" required placeholder="+91 98765 43210">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted small fw-medium" data-i18n="password">Password</label>
+                                <input type="password" id="staff-password" class="form-control glass-input" required placeholder="Minimum 6 characters">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted small fw-medium" data-i18n="role">Role</label>
+                                <select id="staff-role" class="form-select glass-input" onchange="toggleDeptSelection()" required>
+                                    <option value="officer" data-i18n="role_officer" selected>Officer</option>
+                                    <option value="admin" data-i18n="role_admin">Super Admin</option>
+                                </select>
+                            </div>
+                            <div class="mb-4" id="staff-dept-container">
+                                <label class="form-label text-muted small fw-medium" data-i18n="department">Department</label>
+                                <select id="staff-dept" class="form-select glass-input">
+                                    <option value="Sanitation" data-i18n="dept_Sanitation">Sanitation</option>
+                                    <option value="Water Supply" data-i18n="dept_WaterSupply">Water Supply</option>
+                                    <option value="Electricity" data-i18n="dept_Electricity">Electricity</option>
+                                    <option value="Public Works" data-i18n="dept_PublicWorks">Public Works</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-premium w-100 py-2.5" id="btn-submit-staff">
+                                <i class="bi bi-person-plus-fill me-2"></i><span data-i18n="btn_register_user">Register User Account</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Staff Table -->
+                <div class="col-12 col-lg-7 mb-4">
+                    <div class="glass-card h-100">
+                        <h4 class="fw-bold mb-4" data-i18n="officer_list">Registered Staff</h4>
+                        <div class="table-responsive" style="max-height: 480px;">
+                            <table class="table table-dark table-hover align-middle">
+                                <thead>
+                                    <tr class="text-muted">
+                                        <th scope="col">Name</th>
+                                        <th scope="col">Email</th>
+                                        <th scope="col" data-i18n="role">Role</th>
+                                        <th scope="col" data-i18n="department">Department</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="staff-table-body">
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted py-4">No staff profiles loaded.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Firebase Compat SDK CDNs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
+
+    <!-- Project Config & Scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/i18n.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/admin.js"></script>
+
+    <!-- Bootstrap Bundle JS CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Start Auth Guard on Admin Roles
+        guardPage(["admin"]);
+    </script>
+</body>
+</html>
