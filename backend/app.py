@@ -9,7 +9,10 @@ from PIL import Image as PILImage
 import google.generativeai as genai
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
-from config import Config
+try:
+    from config import Config
+except ModuleNotFoundError:
+    from backend.config import Config
 
 app = Flask(__name__)
 # Enable CORS for all routes to allow frontend calls
