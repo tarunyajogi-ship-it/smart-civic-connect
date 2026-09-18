@@ -17,7 +17,7 @@ const googleMapsApiKey = "AIzaSyBRfk5sc0TiUXjMg29URTWf_nUuWN-UD5k";
 // Flask Backend REST API URL (Auto-detects local vs production deployed URL)
 const BACKEND_URL = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
     ? "http://127.0.0.1:5000"
-    : "https://smart-civic-connect-backend.onrender.com"; // Replace with your actual Render/Railway backend URL after deployment
+    : "https://smart-civic-connect-6b1o.onrender.com"; // Replace with your actual Render/Railway backend URL after deployment
 
 // Helper function to check if configuration placeholders are still in use
 function isConfigured() {
