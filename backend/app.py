@@ -23,16 +23,21 @@ app.config.from_object(Config)
 db = None
 firebase_init_error = None
 
-env_json_str = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON")
+env_json_str = (os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON") or "").strip()
 key_path = app.config["FIREBASE_SERVICE_ACCOUNT_KEY"]
 
 try:
-    if env_json_str:
+    if env_json_str and env_json_str.startswith("{"):
         cred_dict = json.loads(env_json_str)
         cred = credentials.Certificate(cred_dict)
         firebase_admin.initialize_app(cred)
         db = firestore.client()
-        print("Firebase Admin SDK successfully initialized via Environment Variable.")
+        print("Firebase Admin SDK successfully initialized via Environment Variable JSON.")
+    elif env_json_str and os.path.exists(env_json_str):
+        cred = credentials.Certificate(env_json_str)
+        firebase_admin.initialize_app(cred)
+        db = firestore.client()
+        print(f"Firebase Admin SDK successfully initialized via path: {env_json_str}")
     elif os.path.exists(key_path):
         cred = credentials.Certificate(key_path)
         firebase_admin.initialize_app(cred)
@@ -41,13 +46,23 @@ try:
     else:
         firebase_init_error = (
             "Firebase serviceAccountKey.json not found in backend directory, "
-            "and FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set. "
-            "Please generate a private key from Firebase Console -> Service Accounts and configure it."
+            "and FIREBASE_SERVICE_ACCOUNT_JSON environment variable does not contain valid JSON. "
+            "Please paste the full contents of serviceAccountKey.json into Render Environment Variables."
         )
         print(f"WARNING: {firebase_init_error}")
 except Exception as e:
-    firebase_init_error = f"Failed to initialize Firebase Admin SDK: {str(e)}"
-    print(f"ERROR: {firebase_init_error}")
+    if os.path.exists(key_path):
+        try:
+            cred = credentials.Certificate(key_path)
+            firebase_admin.initialize_app(cred)
+            db = firestore.client()
+            print("Firebase Admin SDK successfully initialized via local file fallback.")
+        except Exception as file_e:
+            firebase_init_error = f"Failed to initialize Firebase Admin SDK: {str(file_e)}"
+            print(f"ERROR: {firebase_init_error}")
+    else:
+        firebase_init_error = f"Failed to initialize Firebase Admin SDK: {str(e)}"
+        print(f"ERROR: {firebase_init_error}")
 
 
 def firebase_required(f):
