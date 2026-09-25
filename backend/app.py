@@ -91,7 +91,7 @@ def health():
 def analyze_image_features(image, selected_category):
     """
     Smart PIL Visual Feature Classifier fallback.
-    Analyzes pixel color distributions, white background ratios, saturation, contrast, and hue variance.
+    Analyzes pixel color distributions, paper background ratios, saturation, contrast, and feature tones.
     """
     try:
         img = image.convert('RGB').resize((150, 150))
@@ -103,7 +103,7 @@ def analyze_image_features(image, selected_category):
         if unique_colors < 150:
             return False, "Not a related image! The uploaded picture appears to be a drawing, shape graphic, or clipart, not a real-world photograph.", None
 
-        white_background_count = 0
+        paper_light_count = 0
         blue_water_count = 0
         dark_asphalt_count = 0
         night_dark_count = 0
@@ -114,31 +114,33 @@ def analyze_image_features(image, selected_category):
         for r, g, b in pixels:
             color_entropy_set.add((r // 32, g // 32, b // 32))
             
-            # Plain white/light graphic background (r, g, b > 200 with low color difference)
-            if r > 200 and g > 200 and b > 200 and abs(r - g) < 18 and abs(g - b) < 18:
-                white_background_count += 1
+            # Paper / Document / Light Background (r, g, b > 175 with low color saturation)
+            max_c = max(r, g, b)
+            min_c = min(r, g, b)
+            if max_c > 175 and (max_c - min_c) < 22:
+                paper_light_count += 1
 
             # Blue/Cyan water hue detection
-            if b > r + 15 and (b > g - 15 or g > r + 15):
+            if b > r + 18 and (b > g - 10 or g > r + 15):
                 blue_water_count += 1
 
-            # Asphalt / Gray road tone (must have natural texture)
-            if abs(r - g) < 25 and abs(g - b) < 25 and 35 < r < 165:
+            # Asphalt / Road gray tone
+            if abs(r - g) < 20 and abs(g - b) < 20 and 40 < r < 160:
                 dark_asphalt_count += 1
 
             # Night dark tone
-            if r < 40 and g < 40 and b < 40:
+            if r < 35 and g < 35 and b < 35:
                 night_dark_count += 1
 
-            # High intensity streetlight glow
-            if r > 210 and g > 210 and b > 190:
+            # Streetlight bright glow
+            if r > 215 and g > 215 and b > 185:
                 bright_light_count += 1
 
             # Sludge / Drain tone
-            if g > r and g > b and r > 50:
+            if g > r + 10 and g > b + 10 and 40 < r < 160:
                 green_brown_drain_count += 1
 
-        white_ratio = white_background_count / total_pixels
+        paper_ratio = paper_light_count / total_pixels
         water_ratio = blue_water_count / total_pixels
         asphalt_ratio = dark_asphalt_count / total_pixels
         night_ratio = night_dark_count / total_pixels
@@ -146,22 +148,19 @@ def analyze_image_features(image, selected_category):
         drain_ratio = green_brown_drain_count / total_pixels
         color_variety = len(color_entropy_set)
 
-        # 2. Clipart / Illustration / Paper Notes Check:
-        # Real civic photos are outdoor scene photos (roads, soil, waste, pipes) and NEVER have >35% plain white graphic background.
-        if white_ratio > 0.35:
-            return False, "Not a related image! The uploaded picture has a plain white graphic background (clipart, illustration, or document), not a real-world outdoor photograph of a civic issue.", None
+        # 2. Clipart / Document / Paper Notes Check:
+        # Paper notes have high light background ratio and low color palette variance
+        if paper_ratio > 0.45 and color_variety < 90:
+            return False, "Not a related image! The uploaded picture appears to be a paper note, document text, or light background illustration.", None
 
         detected_cat = None
-
-        if water_ratio > 0.12:
+        if water_ratio > 0.15:
             detected_cat = "WaterLeakage"
-        elif night_ratio > 0.40 and light_ratio > 0.02:
+        elif night_ratio > 0.35 and light_ratio > 0.02:
             detected_cat = "Streetlights"
-        elif color_variety > 115 and water_ratio < 0.10:
-            detected_cat = "Garbage"
-        elif asphalt_ratio > 0.42 and color_variety > 80:
-            detected_cat = "Potholes"
-        elif drain_ratio > 0.18:
+        elif asphalt_ratio > 0.45 and selected_category.lower() in ["potholes", "roaddamage"]:
+            detected_cat = selected_category
+        elif drain_ratio > 0.20:
             detected_cat = "Drainage"
 
         if detected_cat and detected_cat.lower() != selected_category.lower():
@@ -177,7 +176,7 @@ def verify_image_content(photo_data_url, category):
     """
     Dual-Layer Category Verification:
     Layer 1: Google Gemini Vision API (if valid API key is present)
-    Layer 2: PIL Visual Feature Classifier (runs automatically as fallback or double-check)
+    Layer 2: PIL Visual Feature Classifier (runs automatically as fallback)
     Returns (is_valid, explanation_message, detected_category_key)
     """
     # Decode base64
@@ -214,9 +213,9 @@ def verify_image_content(photo_data_url, category):
                 prompt = (
                     f"Analyze this image carefully. The user submitted it for a civic issue report under category '{category}'.\n"
                     "CRITICAL RULES:\n"
-                    "1. Check if the image is a drawing, MS Paint shape, black circle diagram, clipart, icon, graphic illustration, paper notes, handwritten text, or document.\n"
-                    "If it is a drawing, shape graphic, clipart, notes, or non-civic photo, output STRICTLY:\n"
-                    "INVALID: Not a real photograph! The uploaded image appears to be a drawing, shape graphic, or notes, not a real-world civic photograph.\n\n"
+                    "1. Check if the image is a drawing, MS Paint shape, black circle diagram, clipart, icon, graphic illustration, paper notes, handwritten text, document, or non-civic photo.\n"
+                    "If it is a drawing, shape graphic, clipart, notes, document, or non-civic photo, output STRICTLY:\n"
+                    "INVALID: Not a real photograph! The uploaded image appears to be a drawing, paper note, or document text.\n\n"
                     "2. Check if the photograph content matches the selected category '{category}'.\n"
                     "System Categories Available: Garbage, Potholes, WaterLeakage, Drainage, Streetlights, RoadDamage.\n\n"
                     "3. Output formatting:\n"
@@ -226,21 +225,31 @@ def verify_image_content(photo_data_url, category):
                 )
 
                 response = model.generate_content([prompt, image])
-                text = response.text.strip()
+                raw_text = (response.text or "").strip()
+                clean_text = raw_text.replace("*", "").strip()
+                upper_text = clean_text.upper()
 
-                if text.startswith("MATCH"):
-                    explanation = text.split(":", 1)[1].strip() if ":" in text else "Valid"
-                    return True, explanation, None
-                elif text.startswith("MISMATCH"):
-                    body = text.split(":", 1)[1].strip()
-                    if "|" in body:
-                        detected_cat, explanation = body.split("|", 1)
-                        return False, explanation.strip(), detected_cat.strip()
-                    else:
-                        return False, body, None
-                elif text.startswith("INVALID") or "DRAWING" in text.upper() or "SHAPE" in text.upper() or "CLIPART" in text.upper() or "PAPER" in text.upper() or "DOCUMENT" in text.upper() or "NOTE" in text.upper():
-                    explanation = text.split(":", 1)[1].strip() if ":" in text else "Not a real photograph! The uploaded image appears to be a drawing, shape graphic, or notes."
+                # Rule A: Invalid / Note / Paper / Drawing / Clipart Rejection
+                if "INVALID" in upper_text or "DRAWING" in upper_text or "CLIPART" in upper_text or "PAPER" in upper_text or "DOCUMENT" in upper_text or "NOTE" in upper_text or "NOT A REAL" in upper_text:
+                    explanation = clean_text.split(":", 1)[1].strip() if ":" in clean_text else clean_text
                     return False, f"Not a related image: {explanation}", None
+
+                # Rule B: Category Mismatch Detection
+                if "MISMATCH" in upper_text:
+                    detected_cat = None
+                    for cat_key in ["Garbage", "Potholes", "WaterLeakage", "Drainage", "Streetlights", "RoadDamage"]:
+                        if cat_key.lower() in clean_text.lower():
+                            detected_cat = cat_key
+                            break
+                    explanation = clean_text.split(":", 1)[1].strip() if ":" in clean_text else "Category mismatch"
+                    if "|" in explanation:
+                        explanation = explanation.split("|", 1)[1].strip()
+                    return False, explanation, detected_cat
+
+                # Rule C: Match Confirmation
+                if "MATCH" in upper_text:
+                    explanation = clean_text.split(":", 1)[1].strip() if ":" in clean_text else "Valid"
+                    return True, explanation, None
         except Exception as e:
             print(f"Gemini API check error: {e}. Switching to Layer 2 PIL Feature Classifier.")
 
