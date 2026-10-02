@@ -62,12 +62,8 @@ function switchTab(tabName) {
     document.getElementById(`section-${tabName}`).classList.remove("d-none");
     document.getElementById(`tab-${tabName}-btn`).classList.add("active");
 
-    // Force map resize triggers when tab changes
-    if (tabName === "map" && mapsApiLoaded && nearbyMap) {
-        google.maps.event.trigger(nearbyMap, "resize");
-        if (currentCoords) {
-            nearbyMap.setCenter(currentCoords);
-        }
+    if (tabName === "map") {
+        loadCommunityTrustMap();
     }
 }
 
@@ -761,102 +757,225 @@ async function confirmResolution(complaintId, satisfied) {
     }
 }
 
+let leafletTrustMap = null;
+let leafletMarkersGroup = null;
+let cachedCommunityComplaints = [];
+let currentTrustFilter = "All";
+
 /**
- * Load open complaints for display on maps / fallbacks
+ * Loads and renders the interactive Community Trust & Resolution Map
  */
-async function loadNearbyComplaints() {
+async function loadCommunityTrustMap() {
     if (!firebaseInitialized) return;
 
     try {
-        // Query active complaints (everything except Closed/Verified)
         const snapshot = await db.collection("complaints").get();
-        const activeComplaints = [];
+        cachedCommunityComplaints = [];
 
         snapshot.forEach(doc => {
             const data = doc.data();
-            if (data.status !== "Closed" && data.status !== "Verified") {
-                activeComplaints.push(data);
-            }
+            cachedCommunityComplaints.push(data);
         });
 
-        if (mapsApiLoaded && nearbyMap) {
-            // Clear existing map markers
-            nearbyMarkers.forEach(m => m.setMap(null));
-            nearbyMarkers = [];
+        // Update counts
+        const allCount = cachedCommunityComplaints.length;
+        const progressCount = cachedCommunityComplaints.filter(c => c.status === "InProgress").length;
+        const resolvedCount = cachedCommunityComplaints.filter(c => ["Resolved", "Verified", "Closed"].includes(c.status)).length;
+        const openCount = cachedCommunityComplaints.filter(c => ["New", "Routed"].includes(c.status)).length;
 
-            // Add pins to map
-            activeComplaints.forEach(item => {
-                const marker = new google.maps.Marker({
-                    position: { lat: item.gpsLat, lng: item.gpsLng },
-                    map: nearbyMap,
-                    title: t(`cat_${item.category}`)
-                });
+        const elAll = document.getElementById("count-all");
+        const elProg = document.getElementById("count-progress");
+        const elRes = document.getElementById("count-resolved");
+        const elOpen = document.getElementById("count-open");
 
-                const infoWindow = new google.maps.InfoWindow({
-                    content: `
-                        <div class="text-dark p-2" style="max-width: 250px;">
-                            <h6 class="fw-bold mb-1">${t(`cat_${item.category}`)}</h6>
-                            <p class="small text-muted mb-2">${item.description}</p>
-                            <div class="mb-2">
-                                <span class="badge bg-secondary">${t(`status_${item.status}`)}</span>
-                                <span class="badge bg-info text-dark">${t("support_count", { count: item.supportCount })}</span>
-                            </div>
-                            <img src="${item.photoUrl}" class="img-thumbnail object-fit-cover w-100 mb-2" style="height: 100px;">
-                        </div>
-                    `
-                });
+        if (elAll) elAll.innerText = allCount;
+        if (elProg) elProg.innerText = progressCount;
+        if (elRes) elRes.innerText = resolvedCount;
+        if (elOpen) elOpen.innerText = openCount;
 
-                marker.addListener("click", () => {
-                    infoWindow.open(nearbyMap, marker);
-                });
+        // Render Leaflet Map
+        renderLeafletTrustMap();
 
-                nearbyMarkers.push(marker);
-            });
-        } else {
-            // Render Fallback static list
-            const fallbackList = document.getElementById("mock-complaints-list");
-            if (fallbackList) {
-                if (activeComplaints.length === 0) {
-                    fallbackList.innerHTML = `<li class="list-group-item bg-transparent text-muted text-center py-3">No active nearby complaints found.</li>`;
-                    return;
-                }
-                
-                fallbackList.innerHTML = "";
-                activeComplaints.forEach(item => {
-                    const li = document.createElement("li");
-                    li.className = "list-group-item bg-transparent text-light border-secondary border-opacity-10 py-3.5";
-                    
-                    const translatedCat = t(`cat_${item.category}`);
-                    const translatedStatus = t(`status_${item.status}`);
-                    const statusClass = `status-${item.status.toLowerCase().replace(" ", "")}`;
-
-                    li.innerHTML = `
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div>
-                                <h6 class="fw-bold mb-1">${translatedCat}</h6>
-                                <p class="small text-muted mb-2 text-truncate" style="max-width: 320px;">${item.description}</p>
-                                <span class="status-badge ${statusClass} scale-90 mb-0">${translatedStatus}</span>
-                            </div>
-                            <div class="text-end">
-                                <button class="btn btn-premium-secondary btn-xs py-1 px-2.5 rounded-pill font-xs" onclick="upvoteNearby('${item.complaintId}')">
-                                    <i class="bi bi-arrow-up-circle-fill me-1"></i>Upvote
-                                </button>
-                                <div class="small text-muted mt-1 font-xs">${item.supportCount} Upvotes</div>
-                            </div>
-                        </div>
-                    `;
-                    fallbackList.appendChild(li);
-                });
-            }
-        }
+        // Render Feed
+        renderCommunityTrustFeed();
 
     } catch (err) {
-        console.error("Failed to load nearby complaints:", err);
+        console.error("Failed to load community trust map complaints:", err);
     }
 }
 
 /**
- * Handle upvoting directly from fallback lists
+ * Filter Community Trust Map markers and cards
+ */
+function filterTrustMap(statusFilter, btn) {
+    currentTrustFilter = statusFilter;
+    
+    // Update active button state
+    document.querySelectorAll(".filter-trust-btn").forEach(b => b.classList.remove("active"));
+    if (btn) btn.classList.add("active");
+
+    renderLeafletTrustMap();
+    renderCommunityTrustFeed();
+}
+
+/**
+ * Renders interactive Leaflet OpenStreetMap with custom colored markers
+ */
+function renderLeafletTrustMap() {
+    const container = document.getElementById("leaflet-trust-map");
+    if (!container || typeof L === "undefined") return;
+
+    // Filter complaints based on current selected tab filter
+    let itemsToDisplay = cachedCommunityComplaints;
+    if (currentTrustFilter === "InProgress") {
+        itemsToDisplay = cachedCommunityComplaints.filter(c => c.status === "InProgress");
+    } else if (currentTrustFilter === "Resolved") {
+        itemsToDisplay = cachedCommunityComplaints.filter(c => ["Resolved", "Verified", "Closed"].includes(c.status));
+    } else if (currentTrustFilter === "Routed") {
+        itemsToDisplay = cachedCommunityComplaints.filter(c => ["New", "Routed"].includes(c.status));
+    }
+
+    const defaultLat = currentCoords ? currentCoords.lat : 17.385044;
+    const defaultLng = currentCoords ? currentCoords.lng : 78.486671;
+
+    // Initialize Leaflet map instance if not created yet
+    if (!leafletTrustMap) {
+        container.innerHTML = ""; // Clear loader
+        leafletTrustMap = L.map("leaflet-trust-map").setView([defaultLat, defaultLng], 13);
+
+        // OpenStreetMap Dark/Standard Tile Layer
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(leafletTrustMap);
+
+        leafletMarkersGroup = L.layerGroup().addTo(leafletTrustMap);
+    } else {
+        leafletMarkersGroup.clearLayers();
+    }
+
+    // Helper for marker color icons
+    const createCustomPinIcon = (colorHex) => {
+        return L.divIcon({
+            className: "custom-leaflet-pin",
+            html: `<div style="background-color: ${colorHex}; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 8px rgba(0,0,0,0.5);"></div>`,
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+        });
+    };
+
+    const yellowIcon = createCustomPinIcon("#f59e0b"); // In Progress
+    const greenIcon = createCustomPinIcon("#10b981");  // Resolved
+    const blueIcon = createCustomPinIcon("#3b82f6");   // Routed / New
+
+    // Add markers
+    itemsToDisplay.forEach(item => {
+        if (!item.gpsLat || !item.gpsLng) return;
+
+        let pinIcon = blueIcon;
+        if (item.status === "InProgress") pinIcon = yellowIcon;
+        if (["Resolved", "Verified", "Closed"].includes(item.status)) pinIcon = greenIcon;
+
+        const catName = t(`cat_${item.category}`) || item.category;
+        const statusName = t(`status_${item.status}`) || item.status;
+
+        const popupContent = `
+            <div class="text-dark p-2" style="max-width: 260px;">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <strong class="fw-bold">${catName}</strong>
+                    <span class="badge ${item.status === 'Resolved' ? 'bg-success' : (item.status === 'InProgress' ? 'bg-warning text-dark' : 'bg-primary')}">${statusName}</span>
+                </div>
+                <p class="small text-muted mb-2 text-truncate">${item.description}</p>
+                <img src="${item.resolvedPhotoUrl || item.photoUrl}" class="img-thumbnail w-100 object-fit-cover mb-2" style="height: 110px;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-muted"><i class="bi bi-heart-fill text-danger me-1"></i>${item.supportCount || 1} Upvotes</small>
+                    <button class="btn btn-primary btn-xs py-1 px-2" onclick="upvoteNearby('${item.complaintId}')">
+                        <i class="bi bi-arrow-up-circle me-1"></i>Upvote
+                    </button>
+                </div>
+            </div>
+        `;
+
+        L.marker([item.gpsLat, item.gpsLng], { icon: pinIcon })
+            .bindPopup(popupContent)
+            .addTo(leafletMarkersGroup);
+    });
+
+    // Invalidate map size to handle hidden tab transitions
+    setTimeout(() => {
+        if (leafletTrustMap) leafletTrustMap.invalidateSize();
+    }, 300);
+}
+
+/**
+ * Renders the Community Reports & Resolution Activity Feed
+ */
+function renderCommunityTrustFeed() {
+    const feedContainer = document.getElementById("community-trust-feed");
+    if (!feedContainer) return;
+
+    let itemsToDisplay = cachedCommunityComplaints;
+    if (currentTrustFilter === "InProgress") {
+        itemsToDisplay = cachedCommunityComplaints.filter(c => c.status === "InProgress");
+    } else if (currentTrustFilter === "Resolved") {
+        itemsToDisplay = cachedCommunityComplaints.filter(c => ["Resolved", "Verified", "Closed"].includes(c.status));
+    } else if (currentTrustFilter === "Routed") {
+        itemsToDisplay = cachedCommunityComplaints.filter(c => ["New", "Routed"].includes(c.status));
+    }
+
+    if (itemsToDisplay.length === 0) {
+        feedContainer.innerHTML = `
+            <div class="col-12 text-center text-muted py-4">
+                <i class="bi bi-info-circle fs-3 mb-2"></i>
+                <p class="mb-0">No community complaints found under '${currentTrustFilter}' status.</p>
+            </div>
+        `;
+        return;
+    }
+
+    feedContainer.innerHTML = "";
+    itemsToDisplay.forEach(item => {
+        const col = document.createElement("div");
+        col.className = "col-12 col-md-6 col-lg-4 mb-3";
+
+        const catName = t(`cat_${item.category}`) || item.category;
+        const statusName = t(`status_${item.status}`) || item.status;
+        const statusClass = `status-${item.status.toLowerCase().replace(" ", "")}`;
+
+        col.innerHTML = `
+            <div class="card bg-dark bg-opacity-30 border-secondary border-opacity-25 text-light h-100 shadow-sm">
+                <div class="card-body p-3 d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="status-badge ${statusClass} scale-90">${statusName}</span>
+                        <span class="badge bg-secondary opacity-75">${catName}</span>
+                    </div>
+                    <h6 class="fw-bold mb-1">${catName}</h6>
+                    <p class="card-text small text-muted text-truncate mb-2">${item.description}</p>
+                    
+                    <div class="position-relative mb-3 rounded overflow-hidden" style="height: 140px; background: #121624;">
+                        <img src="${item.resolvedPhotoUrl || item.photoUrl}" class="w-100 h-100 object-fit-cover" alt="${catName}">
+                        ${item.status === 'Resolved' || item.status === 'Verified' ? `
+                            <span class="position-absolute top-0 end-0 bg-success text-white small px-2 py-1 m-2 rounded shadow-sm fw-bold">
+                                <i class="bi bi-check-circle-fill me-1"></i>Fixed Proof
+                            </span>
+                        ` : ''}
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-auto">
+                        <small class="text-muted"><i class="bi bi-people me-1"></i>${item.supportCount || 1} Upvotes</small>
+                        <button class="btn btn-premium-secondary btn-sm py-1 px-3 rounded-pill font-xs" onclick="upvoteNearby('${item.complaintId}')">
+                            <i class="bi bi-arrow-up-circle-fill me-1"></i>Upvote
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        feedContainer.appendChild(col);
+    });
+}
+
+/**
+ * Handle upvoting directly from fallback lists / community trust map
  */
 async function upvoteNearby(complaintId) {
     try {
