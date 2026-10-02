@@ -43,7 +43,7 @@ function checkFirebaseConfig() {
 }
 
 /**
- * Handle citizen registration (Requires Email Verification before access)
+ * Handle citizen registration with Email Verification
  */
 async function registerCitizen(name, email, password, phone) {
     if (!firebaseInitialized) {
@@ -56,11 +56,12 @@ async function registerCitizen(name, email, password, phone) {
         const userCredential = await auth.createUserWithEmailAndPassword(email, password);
         const user = userCredential.user;
 
-        // 2. Send verification email to citizen inbox
+        // 2. Send Email Verification link via Firebase Auth
         try {
             await user.sendEmailVerification();
+            console.log("Verification email sent to:", email);
         } catch (vErr) {
-            console.warn("sendEmailVerification warning:", vErr);
+            console.warn("Could not send verification email automatically:", vErr);
         }
 
         // 3. Create user profile doc in Firestore
@@ -71,21 +72,21 @@ async function registerCitizen(name, email, password, phone) {
             role: "citizen",
             department: null,
             phone: phone,
-            emailVerified: false,
+            emailVerified: user.emailVerified || false,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
         await db.collection("users").doc(user.uid).set(citizenData);
-        console.log("Citizen Firestore profile created successfully with emailVerified: false.");
+        console.log("Citizen Firestore profile created.");
 
-        // Sign out immediately so citizen must verify email link before signing in
+        // Inform user to verify email
+        alert(`📧 Registration successful! A verification link has been sent to ${email}.\n\nPlease check your inbox/spam folder and click the link to verify your email address before logging in.`);
+        
+        // Sign out temporary session so they must log in after verifying
         await auth.signOut();
-
-        return {
-            success: true,
-            email: email,
-            message: `Registration successful! A verification email has been sent to ${email}. Please verify your email inbox before logging in.`
-        };
+        
+        // Return to login form view
+        window.location.reload();
     } catch (error) {
         console.error("Registration error:", error);
         throw error;
@@ -93,21 +94,18 @@ async function registerCitizen(name, email, password, phone) {
 }
 
 /**
- * Helper to resend verification email
+ * Resends verification email to current user
  */
-async function triggerResendVerification(email, password) {
-    if (!firebaseInitialized) return false;
+async function resendVerificationEmail(email, password) {
     try {
-        const cred = await auth.signInWithEmailAndPassword(email, password);
-        if (cred.user) {
-            await cred.user.sendEmailVerification();
-            await auth.signOut();
-            return true;
-        }
-    } catch (e) {
-        console.error("Resend error:", e);
+        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        await userCredential.user.sendEmailVerification();
+        await auth.signOut();
+        alert(`📧 Verification email resent to ${email}. Please check your inbox and spam folder.`);
+    } catch (err) {
+        console.error("Failed to resend verification email:", err);
+        alert("Could not resend verification email: " + (err.message || err));
     }
-    return false;
 }
 
 /**
@@ -124,12 +122,11 @@ async function loginUser(email, password, expectedRole = null) {
         const userCredential = await auth.signInWithEmailAndPassword(email, password);
         const user = userCredential.user;
 
-        // Force reload to get updated emailVerified state from Firebase Auth
+        // Reload user status to fetch latest emailVerified boolean
         await user.reload();
-        const freshUser = auth.currentUser;
 
         // 2. Retrieve Firestore document for Role
-        const userDoc = await db.collection("users").doc(freshUser.uid).get();
+        const userDoc = await db.collection("users").doc(user.uid).get();
         if (!userDoc.exists) {
             throw new Error("User record not found in database.");
         }
@@ -137,21 +134,26 @@ async function loginUser(email, password, expectedRole = null) {
         const userData = userDoc.data();
         const role = userData.role ? userData.role.toLowerCase().trim() : "";
 
-        // Strictly verify email status for Citizens
-        if (role === "citizen") {
-            if (!freshUser.emailVerified) {
-                await auth.signOut();
-                const err = new Error("EMAIL_NOT_VERIFIED");
-                err.userEmail = email;
-                throw err;
-            } else if (!userData.emailVerified) {
-                // Sync Firestore emailVerified flag
-                await db.collection("users").doc(freshUser.uid).update({ emailVerified: true });
-            }
+        // Enforce Email Verification for Citizen accounts
+        if (role === "citizen" && !user.emailVerified) {
+            // Update Firestore if changed
+            await db.collection("users").doc(user.uid).update({ emailVerified: false }).catch(() => {});
+            
+            // Sign out
+            await auth.signOut();
+            
+            const err = new Error(`📧 Your email (${email}) is not verified yet. Please check your email inbox and click the verification link before logging in.`);
+            err.code = "auth/email-not-verified";
+            throw err;
         }
 
         if (expectedRole && role !== expectedRole.toLowerCase().trim()) {
             console.log(`Portal tab notice: User role is '${role}'. Redirecting to ${role} dashboard.`);
+        }
+
+        // Update verified state in Firestore if true
+        if (user.emailVerified && !userData.emailVerified) {
+            await db.collection("users").doc(user.uid).update({ emailVerified: true }).catch(() => {});
         }
 
         // 3. Role-based redirect
@@ -209,12 +211,8 @@ function guardPage(allowedRoles) {
             }
 
             try {
-                // Refresh auth user to check email verification
-                await user.reload();
-                const freshUser = auth.currentUser;
-
                 // Fetch user data
-                const userDoc = await db.collection("users").doc(freshUser.uid).get();
+                const userDoc = await db.collection("users").doc(user.uid).get();
                 if (!userDoc.exists) {
                     console.error("User document not found.");
                     auth.signOut();
@@ -224,14 +222,6 @@ function guardPage(allowedRoles) {
 
                 const userData = userDoc.data();
                 const userRole = userData.role ? userData.role.toLowerCase().trim() : "";
-
-                // Check email verification for Citizens
-                if (userRole === "citizen" && !freshUser.emailVerified) {
-                    console.warn("Citizen email unverified. Blocking access...");
-                    await auth.signOut();
-                    window.location.href = "index.html";
-                    return;
-                }
 
                 // Check authorization
                 if (!allowedRoles.includes(userRole)) {

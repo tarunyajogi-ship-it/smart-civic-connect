@@ -67,9 +67,6 @@ function switchTab(tabName) {
     }
 }
 
-let leafletSubmissionMap = null;
-let leafletSubmissionMarker = null;
-
 /**
  * Captures user coordinates using navigator.geolocation
  */
@@ -101,8 +98,16 @@ function captureLocation() {
                     mockCoords.innerText = `Lat: ${currentCoords.lat.toFixed(6)}, Lng: ${currentCoords.lng.toFixed(6)}`;
                 }
 
-                // Render Leaflet GPS submission map marker
-                initLeafletSubmissionMap(currentCoords.lat, currentCoords.lng);
+                // Update map centers
+                if (mapsApiLoaded && submissionMap) {
+                    const latlng = new google.maps.LatLng(currentCoords.lat, currentCoords.lng);
+                    submissionMap.setCenter(latlng);
+                    if (submissionMarker) {
+                        submissionMarker.setPosition(latlng);
+                    }
+                } else if (typeof renderLeafletSubmissionMap === "function") {
+                    renderLeafletSubmissionMap();
+                }
             },
             (error) => {
                 console.warn("Geolocation access denied or failed:", error);
@@ -120,65 +125,13 @@ function captureLocation() {
                 if (mockCoords) {
                     mockCoords.innerText = `Lat: ${currentCoords.lat.toFixed(6)}, Lng: ${currentCoords.lng.toFixed(6)} (Default/Simulated)`;
                 }
-
-                // Render Leaflet GPS submission map marker with defaults
-                initLeafletSubmissionMap(currentCoords.lat, currentCoords.lng);
             },
             { enableHighAccuracy: true, timeout: 10000 }
         );
     } else {
         gpsSpinner.classList.add("d-none");
         gpsText.innerText = "Browser doesn't support Geolocation.";
-        initLeafletSubmissionMap(currentCoords.lat, currentCoords.lng);
     }
-}
-
-/**
- * Renders live draggable Leaflet submission map for GPS location selection
- */
-function initLeafletSubmissionMap(lat, lng) {
-    const container = document.getElementById("leaflet-submission-map");
-    if (!container || typeof L === "undefined") return;
-
-    if (!leafletSubmissionMap) {
-        container.innerHTML = ""; // Clear spinner loader
-        leafletSubmissionMap = L.map("leaflet-submission-map").setView([lat, lng], 15);
-
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            maxZoom: 19,
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(leafletSubmissionMap);
-
-        const customMarkerIcon = L.divIcon({
-            className: "custom-leaflet-submission-pin",
-            html: `<div style="background-color: #ef4444; width: 26px; height: 26px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(239, 68, 68, 0.8);"></div>`,
-            iconSize: [26, 26],
-            iconAnchor: [13, 13]
-        });
-
-        leafletSubmissionMarker = L.marker([lat, lng], {
-            draggable: true,
-            icon: customMarkerIcon
-        }).addTo(leafletSubmissionMap);
-
-        // Update currentCoords on marker drag
-        leafletSubmissionMarker.on("dragend", function (e) {
-            const pos = e.target.getLatLng();
-            currentCoords.lat = pos.lat;
-            currentCoords.lng = pos.lng;
-            document.getElementById("val-lat").innerText = currentCoords.lat.toFixed(6);
-            document.getElementById("val-lng").innerText = currentCoords.lng.toFixed(6);
-        });
-    } else {
-        leafletSubmissionMap.setView([lat, lng], 15);
-        if (leafletSubmissionMarker) {
-            leafletSubmissionMarker.setLatLng([lat, lng]);
-        }
-    }
-
-    setTimeout(() => {
-        if (leafletSubmissionMap) leafletSubmissionMap.invalidateSize();
-    }, 300);
 }
 
 /**
@@ -867,6 +820,62 @@ function filterTrustMap(statusFilter, btn) {
     renderCommunityTrustFeed();
 }
 
+let leafletSubmissionMap = null;
+let leafletSubmissionMarker = null;
+
+/**
+ * Renders interactive Leaflet map for Report Issue GPS location picker
+ */
+function renderLeafletSubmissionMap() {
+    const container = document.getElementById("submission-map");
+    if (!container || typeof L === "undefined") return;
+
+    const mockView = document.getElementById("mock-submission-map");
+    if (mockView) mockView.style.display = "none";
+
+    const lat = currentCoords ? currentCoords.lat : 17.385044;
+    const lng = currentCoords ? currentCoords.lng : 78.486671;
+
+    if (container._leaflet_id && !leafletSubmissionMap) {
+        container.innerHTML = "";
+    }
+
+    if (!leafletSubmissionMap) {
+        leafletSubmissionMap = L.map("submission-map").setView([lat, lng], 15);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(leafletSubmissionMap);
+
+        leafletSubmissionMarker = L.marker([lat, lng], { draggable: true }).addTo(leafletSubmissionMap);
+        leafletSubmissionMarker.bindPopup("Drag marker or click map to set issue location");
+
+        leafletSubmissionMarker.on("dragend", function (e) {
+            const pos = e.target.getLatLng();
+            currentCoords.lat = pos.lat;
+            currentCoords.lng = pos.lng;
+            const elLat = document.getElementById("val-lat");
+            const elLng = document.getElementById("val-lng");
+            if (elLat) elLat.innerText = currentCoords.lat.toFixed(6);
+            if (elLng) elLng.innerText = currentCoords.lng.toFixed(6);
+        });
+
+        leafletSubmissionMap.on("click", function (e) {
+            const pos = e.latlng;
+            leafletSubmissionMarker.setLatLng(pos);
+            currentCoords.lat = pos.lat;
+            currentCoords.lng = pos.lng;
+            const elLat = document.getElementById("val-lat");
+            const elLng = document.getElementById("val-lng");
+            if (elLat) elLat.innerText = currentCoords.lat.toFixed(6);
+            if (elLng) elLng.innerText = currentCoords.lng.toFixed(6);
+        });
+    } else {
+        leafletSubmissionMap.setView([lat, lng], 15);
+        if (leafletSubmissionMarker) leafletSubmissionMarker.setLatLng([lat, lng]);
+    }
+}
+
 /**
  * Renders interactive Leaflet OpenStreetMap with custom colored markers
  */
@@ -886,6 +895,10 @@ function renderLeafletTrustMap() {
 
     const defaultLat = currentCoords ? currentCoords.lat : 17.385044;
     const defaultLng = currentCoords ? currentCoords.lng : 78.486671;
+
+    if (container._leaflet_id && !leafletTrustMap) {
+        container.innerHTML = "";
+    }
 
     // Initialize Leaflet map instance if not created yet
     if (!leafletTrustMap) {
@@ -917,7 +930,7 @@ function renderLeafletTrustMap() {
     const greenIcon = createCustomPinIcon("#10b981");  // Resolved
     const blueIcon = createCustomPinIcon("#3b82f6");   // Routed / New
 
-    const boundsGroup = [];
+    const bounds = [];
 
     // Add markers
     itemsToDisplay.forEach(item => {
@@ -951,13 +964,11 @@ function renderLeafletTrustMap() {
             .bindPopup(popupContent)
             .addTo(leafletMarkersGroup);
 
-        boundsGroup.push([item.gpsLat, item.gpsLng]);
+        bounds.push([item.gpsLat, item.gpsLng]);
     });
 
-    if (boundsGroup.length > 0 && leafletTrustMap) {
-        leafletTrustMap.fitBounds(boundsGroup, { maxZoom: 15, padding: [30, 30] });
-    } else if (leafletTrustMap) {
-        leafletTrustMap.setView([defaultLat, defaultLng], 13);
+    if (bounds.length > 0 && leafletTrustMap) {
+        leafletTrustMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
     }
 
     // Invalidate map size to handle hidden tab transitions

@@ -226,108 +226,45 @@ function buildStatusChart(statusCounts) {
     });
 }
 
-let adminLeafletMap = null;
-let adminLeafletMarkersGroup = null;
-
 /**
- * Initialize Leaflet OpenStreetMap for Admin Console
+ * Initialize Google Maps Heatmap
  */
 function initHeatmap() {
-    renderAdminLeafletMap();
+    document.getElementById("mock-heatmap").classList.add("d-none");
+    
+    const centerCoords = { lat: 17.385044, lng: 78.486671 }; // center
+    adminMap = new google.maps.Map(document.getElementById("admin-heatmap"), {
+        zoom: 13,
+        center: centerCoords,
+        styles: [
+            { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+            { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+            { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+            { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
+            { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
+        ]
+    });
+
+    renderHeatmapPoints();
 }
 
 /**
- * Render Leaflet City Distribution & Heatmap Layer
+ * Render heatmap gradient layer
  */
-async function renderAdminLeafletMap() {
-    const container = document.getElementById("admin-heatmap-map");
-    if (!container || typeof L === "undefined") return;
+function renderHeatmapPoints() {
+    if (!adminMap || heatmapDataPoints.length === 0) return;
 
-    try {
-        if (!firebaseInitialized) return;
+    if (adminHeatmap) adminHeatmap.setMap(null);
 
-        const snapshot = await db.collection("complaints").get();
-        const complaints = [];
-        snapshot.forEach(doc => complaints.push(doc.data()));
+    const googlePoints = heatmapDataPoints.map(p => {
+        return new google.maps.LatLng(p.lat, p.lng);
+    });
 
-        if (!adminLeafletMap) {
-            container.innerHTML = ""; // Clear loader
-            const defaultLat = complaints.length > 0 ? complaints[0].gpsLat : 17.385044;
-            const defaultLng = complaints.length > 0 ? complaints[0].gpsLng : 78.486671;
-
-            adminLeafletMap = L.map("admin-heatmap-map").setView([defaultLat, defaultLng], 12);
-
-            // OpenStreetMap Dark/Standard Tile Layer
-            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-                maxZoom: 19,
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            }).addTo(adminLeafletMap);
-
-            adminLeafletMarkersGroup = L.layerGroup().addTo(adminLeafletMap);
-        } else {
-            adminLeafletMarkersGroup.clearLayers();
-        }
-
-        const createPinIcon = (colorHex) => {
-            return L.divIcon({
-                className: "custom-admin-pin",
-                html: `<div style="background-color: ${colorHex}; width: 22px; height: 22px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 8px rgba(0,0,0,0.6);"></div>`,
-                iconSize: [22, 22],
-                iconAnchor: [11, 11]
-            });
-        };
-
-        const redIcon = createPinIcon("#ef4444");    // Escalated
-        const yellowIcon = createPinIcon("#f59e0b"); // In Progress
-        const greenIcon = createPinIcon("#10b981");  // Resolved
-        const blueIcon = createPinIcon("#3b82f6");   // Routed/New
-
-        const boundsGroup = [];
-
-        complaints.forEach(item => {
-            if (!item.gpsLat || !item.gpsLng) return;
-
-            let icon = blueIcon;
-            if (item.status === "Escalated") icon = redIcon;
-            else if (item.status === "InProgress") icon = yellowIcon;
-            else if (["Resolved", "Verified", "Closed"].includes(item.status)) icon = greenIcon;
-
-            const catText = t(`cat_${item.category}`) || item.category;
-            const statusText = t(`status_${item.status}`) || item.status;
-            const deptText = item.department ? t(`dept_${item.department}`) : "General";
-
-            const popupContent = `
-                <div class="text-dark p-2" style="max-width: 250px;">
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <strong class="fw-bold">${catText}</strong>
-                        <span class="badge ${item.status === 'Escalated' ? 'bg-danger' : (item.status === 'Resolved' ? 'bg-success' : 'bg-primary')}">${statusText}</span>
-                    </div>
-                    <p class="small text-muted mb-1 text-truncate">${item.description || ''}</p>
-                    <small class="d-block text-secondary mb-2">Dept: <b>${deptText}</b></small>
-                    <img src="${item.resolvedPhotoUrl || item.photoUrl}" class="img-thumbnail w-100 object-fit-cover mb-1" style="height: 100px;">
-                    <small class="text-muted font-monospace">GPS: ${item.gpsLat.toFixed(4)}, ${item.gpsLng.toFixed(4)}</small>
-                </div>
-            `;
-
-            const marker = L.marker([item.gpsLat, item.gpsLng], { icon: icon })
-                .bindPopup(popupContent)
-                .addTo(adminLeafletMarkersGroup);
-
-            boundsGroup.push([item.gpsLat, item.gpsLng]);
-        });
-
-        // Fit map view to bounds of all city complaints
-        if (boundsGroup.length > 0 && adminLeafletMap) {
-            adminLeafletMap.fitBounds(boundsGroup, { maxZoom: 15, padding: [40, 40] });
-        }
-
-        setTimeout(() => {
-            if (adminLeafletMap) adminLeafletMap.invalidateSize();
-        }, 300);
-
-    } catch (err) {
-        console.error("Admin Leaflet map error:", err);
-    }
+    adminHeatmap = new google.maps.visualization.HeatmapLayer({
+        data: googlePoints,
+        map: adminMap,
+        radius: 20
+    });
 }
 
 /**
@@ -563,9 +500,7 @@ async function closeEscalated(complaintId) {
  */
 function viewEscalatedMap(lat, lng) {
     switchAdminTab("dash");
-    if (adminLeafletMap) {
-        adminLeafletMap.setView([parseFloat(lat), parseFloat(lng)], 17);
-    } else if (adminMap) {
+    if (adminMap) {
         adminMap.setCenter({ lat: parseFloat(lat), lng: parseFloat(lng) });
         adminMap.setZoom(17);
     }
