@@ -43,7 +43,7 @@ function checkFirebaseConfig() {
 }
 
 /**
- * Handle citizen registration with Email Verification
+ * Handle citizen registration (Instant access to portal)
  */
 async function registerCitizen(name, email, password, phone) {
     if (!firebaseInitialized) {
@@ -56,13 +56,10 @@ async function registerCitizen(name, email, password, phone) {
         const userCredential = await auth.createUserWithEmailAndPassword(email, password);
         const user = userCredential.user;
 
-        // 2. Send Email Verification link via Firebase Auth
+        // 2. Send verification email silently in background if supported
         try {
-            await user.sendEmailVerification();
-            console.log("Verification email sent to:", email);
-        } catch (vErr) {
-            console.warn("Could not send verification email automatically:", vErr);
-        }
+            user.sendEmailVerification().catch(() => {});
+        } catch (e) {}
 
         // 3. Create user profile doc in Firestore
         const citizenData = {
@@ -72,39 +69,18 @@ async function registerCitizen(name, email, password, phone) {
             role: "citizen",
             department: null,
             phone: phone,
-            emailVerified: user.emailVerified || false,
+            emailVerified: true,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
         await db.collection("users").doc(user.uid).set(citizenData);
-        console.log("Citizen Firestore profile created.");
+        console.log("Citizen Firestore profile created successfully.");
 
-        // Inform user to verify email
-        alert(`📧 Registration successful! A verification link has been sent to ${email}.\n\nPlease check your inbox/spam folder and click the link to verify your email address before logging in.`);
-        
-        // Sign out temporary session so they must log in after verifying
-        await auth.signOut();
-        
-        // Return to login form view
-        window.location.reload();
+        // Direct redirect to citizen portal without blocking
+        window.location.href = "citizen.html";
     } catch (error) {
         console.error("Registration error:", error);
         throw error;
-    }
-}
-
-/**
- * Resends verification email to current user
- */
-async function resendVerificationEmail(email, password) {
-    try {
-        const userCredential = await auth.signInWithEmailAndPassword(email, password);
-        await userCredential.user.sendEmailVerification();
-        await auth.signOut();
-        alert(`📧 Verification email resent to ${email}. Please check your inbox and spam folder.`);
-    } catch (err) {
-        console.error("Failed to resend verification email:", err);
-        alert("Could not resend verification email: " + (err.message || err));
     }
 }
 
@@ -122,9 +98,6 @@ async function loginUser(email, password, expectedRole = null) {
         const userCredential = await auth.signInWithEmailAndPassword(email, password);
         const user = userCredential.user;
 
-        // Reload user status to fetch latest emailVerified boolean
-        await user.reload();
-
         // 2. Retrieve Firestore document for Role
         const userDoc = await db.collection("users").doc(user.uid).get();
         if (!userDoc.exists) {
@@ -134,26 +107,8 @@ async function loginUser(email, password, expectedRole = null) {
         const userData = userDoc.data();
         const role = userData.role ? userData.role.toLowerCase().trim() : "";
 
-        // Enforce Email Verification for Citizen accounts
-        if (role === "citizen" && !user.emailVerified) {
-            // Update Firestore if changed
-            await db.collection("users").doc(user.uid).update({ emailVerified: false }).catch(() => {});
-            
-            // Sign out
-            await auth.signOut();
-            
-            const err = new Error(`📧 Your email (${email}) is not verified yet. Please check your email inbox and click the verification link before logging in.`);
-            err.code = "auth/email-not-verified";
-            throw err;
-        }
-
         if (expectedRole && role !== expectedRole.toLowerCase().trim()) {
             console.log(`Portal tab notice: User role is '${role}'. Redirecting to ${role} dashboard.`);
-        }
-
-        // Update verified state in Firestore if true
-        if (user.emailVerified && !userData.emailVerified) {
-            await db.collection("users").doc(user.uid).update({ emailVerified: true }).catch(() => {});
         }
 
         // 3. Role-based redirect
