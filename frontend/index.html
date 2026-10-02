@@ -265,12 +265,43 @@
                     await loginUser(email, password, currentSelectedRole);
                 } catch (err) {
                     console.error("Login failed:", err);
-                    authAlert.innerText = err.message || "Login failed. Please check credentials.";
+                    if (err.message === "EMAIL_NOT_VERIFIED") {
+                        authAlert.className = "alert alert-warning shadow-sm";
+                        authAlert.innerHTML = `
+                            <div class="d-flex align-items-start gap-2">
+                                <i class="bi bi-envelope-exclamation-fill fs-4 text-warning flex-shrink-0"></i>
+                                <div>
+                                    <strong class="d-block text-white mb-1">Email Verification Required</strong>
+                                    <p class="small mb-2 text-light opacity-90">Your email address (<strong>${email}</strong>) has not been verified yet. Please check your inbox and click the verification link.</p>
+                                    <button type="button" class="btn btn-sm btn-outline-light rounded-pill px-3" onclick="resendEmailVerification('${email}', '${password}')">
+                                        <i class="bi bi-send me-1"></i> Resend Verification Email
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        authAlert.className = "alert alert-danger shadow-sm";
+                        authAlert.innerText = err.message || "Login failed. Please check credentials.";
+                    }
                     authAlert.classList.remove("d-none");
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = originalText;
                 }
             });
+
+            // Helper to resend email link
+            window.resendEmailVerification = async function(email, pwd) {
+                try {
+                    const sent = await triggerResendVerification(email, pwd);
+                    if (sent) {
+                        alert(`A new verification link has been sent to ${email}. Please check your inbox!`);
+                    } else {
+                        alert("Could not resend email. Please verify your credentials and try again.");
+                    }
+                } catch (e) {
+                    alert("Failed to resend verification email: " + e.message);
+                }
+            };
 
             // Handle registration
             registerForm.addEventListener("submit", async (e) => {
@@ -285,6 +316,7 @@
                 const submitBtn = document.getElementById("reg-submit-btn");
 
                 if (password !== confirm) {
+                    authAlert.className = "alert alert-danger shadow-sm";
                     authAlert.innerText = "Passwords do not match!";
                     authAlert.classList.remove("d-none");
                     return;
@@ -295,11 +327,33 @@
                 submitBtn.innerText = t("registering");
 
                 try {
-                    await registerCitizen(name, email, password, phone);
+                    const res = await registerCitizen(name, email, password, phone);
+                    
+                    // Reset registration form and switch to login tab
+                    registerForm.reset();
+                    registerForm.classList.add("d-none");
+                    loginForm.classList.remove("d-none");
+                    authTitle.innerText = roleConfigs["citizen"].title;
+                    authSubtitle.innerText = roleConfigs["citizen"].subtitle;
+
+                    // Show success banner with email verification instruction
+                    authAlert.className = "alert alert-success shadow-sm";
+                    authAlert.innerHTML = `
+                        <div class="d-flex align-items-start gap-2">
+                            <i class="bi bi-check-circle-fill fs-4 text-success flex-shrink-0"></i>
+                            <div>
+                                <strong class="d-block text-white mb-1">Registration Successful!</strong>
+                                <p class="small mb-0 text-light opacity-90">We've sent a verification link to <strong>${email}</strong>. Please check your inbox and click the verification link before logging in.</p>
+                            </div>
+                        </div>
+                    `;
+                    authAlert.classList.remove("d-none");
                 } catch (err) {
                     console.error("Registration failed:", err);
+                    authAlert.className = "alert alert-danger shadow-sm";
                     authAlert.innerText = err.message || "Registration failed.";
                     authAlert.classList.remove("d-none");
+                } finally {
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = originalText;
                 }

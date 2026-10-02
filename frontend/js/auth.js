@@ -43,7 +43,7 @@ function checkFirebaseConfig() {
 }
 
 /**
- * Handle citizen registration (Instant access to portal)
+ * Handle citizen registration (Requires Email Verification before access)
  */
 async function registerCitizen(name, email, password, phone) {
     if (!firebaseInitialized) {
@@ -56,10 +56,12 @@ async function registerCitizen(name, email, password, phone) {
         const userCredential = await auth.createUserWithEmailAndPassword(email, password);
         const user = userCredential.user;
 
-        // 2. Send verification email silently in background if supported
+        // 2. Send verification email to citizen inbox
         try {
-            user.sendEmailVerification().catch(() => {});
-        } catch (e) {}
+            await user.sendEmailVerification();
+        } catch (vErr) {
+            console.warn("sendEmailVerification warning:", vErr);
+        }
 
         // 3. Create user profile doc in Firestore
         const citizenData = {
@@ -69,19 +71,43 @@ async function registerCitizen(name, email, password, phone) {
             role: "citizen",
             department: null,
             phone: phone,
-            emailVerified: true,
+            emailVerified: false,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
         await db.collection("users").doc(user.uid).set(citizenData);
-        console.log("Citizen Firestore profile created successfully.");
+        console.log("Citizen Firestore profile created successfully with emailVerified: false.");
 
-        // Direct redirect to citizen portal without blocking
-        window.location.href = "citizen.html";
+        // Sign out immediately so citizen must verify email link before signing in
+        await auth.signOut();
+
+        return {
+            success: true,
+            email: email,
+            message: `Registration successful! A verification email has been sent to ${email}. Please verify your email inbox before logging in.`
+        };
     } catch (error) {
         console.error("Registration error:", error);
         throw error;
     }
+}
+
+/**
+ * Helper to resend verification email
+ */
+async function triggerResendVerification(email, password) {
+    if (!firebaseInitialized) return false;
+    try {
+        const cred = await auth.signInWithEmailAndPassword(email, password);
+        if (cred.user) {
+            await cred.user.sendEmailVerification();
+            await auth.signOut();
+            return true;
+        }
+    } catch (e) {
+        console.error("Resend error:", e);
+    }
+    return false;
 }
 
 /**
@@ -98,14 +124,31 @@ async function loginUser(email, password, expectedRole = null) {
         const userCredential = await auth.signInWithEmailAndPassword(email, password);
         const user = userCredential.user;
 
+        // Force reload to get updated emailVerified state from Firebase Auth
+        await user.reload();
+        const freshUser = auth.currentUser;
+
         // 2. Retrieve Firestore document for Role
-        const userDoc = await db.collection("users").doc(user.uid).get();
+        const userDoc = await db.collection("users").doc(freshUser.uid).get();
         if (!userDoc.exists) {
             throw new Error("User record not found in database.");
         }
 
         const userData = userDoc.data();
         const role = userData.role ? userData.role.toLowerCase().trim() : "";
+
+        // Strictly verify email status for Citizens
+        if (role === "citizen") {
+            if (!freshUser.emailVerified) {
+                await auth.signOut();
+                const err = new Error("EMAIL_NOT_VERIFIED");
+                err.userEmail = email;
+                throw err;
+            } else if (!userData.emailVerified) {
+                // Sync Firestore emailVerified flag
+                await db.collection("users").doc(freshUser.uid).update({ emailVerified: true });
+            }
+        }
 
         if (expectedRole && role !== expectedRole.toLowerCase().trim()) {
             console.log(`Portal tab notice: User role is '${role}'. Redirecting to ${role} dashboard.`);
@@ -166,8 +209,12 @@ function guardPage(allowedRoles) {
             }
 
             try {
+                // Refresh auth user to check email verification
+                await user.reload();
+                const freshUser = auth.currentUser;
+
                 // Fetch user data
-                const userDoc = await db.collection("users").doc(user.uid).get();
+                const userDoc = await db.collection("users").doc(freshUser.uid).get();
                 if (!userDoc.exists) {
                     console.error("User document not found.");
                     auth.signOut();
@@ -177,6 +224,14 @@ function guardPage(allowedRoles) {
 
                 const userData = userDoc.data();
                 const userRole = userData.role ? userData.role.toLowerCase().trim() : "";
+
+                // Check email verification for Citizens
+                if (userRole === "citizen" && !freshUser.emailVerified) {
+                    console.warn("Citizen email unverified. Blocking access...");
+                    await auth.signOut();
+                    window.location.href = "index.html";
+                    return;
+                }
 
                 // Check authorization
                 if (!allowedRoles.includes(userRole)) {
