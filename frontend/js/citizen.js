@@ -34,7 +34,7 @@ async function initPage(user) {
     // Listen for language changes to update timelines dynamically
     window.addEventListener("languageChanged", () => {
         loadUserComplaints();
-        loadNearbyComplaints();
+        loadCommunityTrustMap();
     });
 
     // Try loading Google Maps API
@@ -43,8 +43,9 @@ async function initPage(user) {
         if (success) {
             initGoogleMaps();
         } else {
-            console.log("Mock Maps mode active.");
-            loadNearbyComplaints(); // populate fallback list
+            console.log("Leaflet OpenStreetMap mode active.");
+            renderLeafletSubmissionMap();
+            loadCommunityTrustMap();
         }
     });
 
@@ -386,7 +387,7 @@ function setupDuplicateModalEvents() {
                 resetReportForm();
                 switchTab("track");
                 loadUserComplaints();
-                loadNearbyComplaints();
+                loadCommunityTrustMap();
             } else {
                 alert(`Error: ${result.message}`);
             }
@@ -485,7 +486,7 @@ async function executeSubmitComplaint() {
             resetReportForm();
             switchTab("track");
             loadUserComplaints();
-            loadNearbyComplaints();
+            loadCommunityTrustMap();
         } else if (result.error_type === "category_mismatch" && result.detectedCategory) {
             promptCategoryMismatch(result.message, result.detectedCategory);
         } else {
@@ -1061,7 +1062,7 @@ async function upvoteNearby(complaintId) {
         const result = await response.json();
         if (result.status === "success") {
             showToast(t("support_success"), "success");
-            loadNearbyComplaints();
+            loadCommunityTrustMap();
             loadUserComplaints();
         } else {
             alert(result.message);
@@ -1070,6 +1071,11 @@ async function upvoteNearby(complaintId) {
         console.error(err);
     }
 }
+
+/**
+ * Global alias for backward compatibility
+ */
+const loadNearbyComplaints = loadCommunityTrustMap;
 
 /**
  * Toast notification popup utility
